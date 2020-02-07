@@ -30,7 +30,9 @@ function BertClass() {
 	this.LARGE_TUPLE = String.fromCharCode(105);
 	this.NIL = String.fromCharCode(106);
 	this.ZERO = String.fromCharCode(0);
-    this.ZERO_CHAR = String.fromCharCode(48);
+	this.ZERO_CHAR = String.fromCharCode(48);
+	this.NEW_FLOAT = String.fromCharCode(70);
+	this.EMPTY_OBJECT = String.fromCharCode(106);
 }
 
 function BertAtom(Obj) {
@@ -38,6 +40,14 @@ function BertAtom(Obj) {
 	this.value = Obj;
 	this.toString = function () {
 		return Obj;
+	};
+}
+
+function BertNil() {
+	this.type = "Nil";
+	this.value = "";
+	this.toString = function () {
+		return "";
 	};
 }
 
@@ -100,7 +110,9 @@ BertClass.prototype.tuple = function () {
 	return new BertTuple(arguments);
 };
 
-
+BertClass.prototype.nilobject = function () {
+	return new BertNil();
+};
 
 // - ENCODING -
 
@@ -152,6 +164,7 @@ BertClass.prototype.encode_number = function (Obj) {
 	}
 };
 
+/*
 BertClass.prototype.encode_float = function (Obj) {
 	// float...
 	var s = Obj.toExponential(20);
@@ -167,7 +180,24 @@ BertClass.prototype.encode_float = function (Obj) {
 	while (s.length < 31) {
 		s += this.ZERO;
 	}
+	console.log("s--->",s);
 	return this.FLOAT + s;
+};
+*/
+
+BertClass.prototype.encode_float = function (Obj) {
+
+	var farr = new Float64Array(1);
+	farr[0] = Obj;
+	var barr = new Int8Array(farr.buffer);   // use the buffer of Float32Array view
+	var num = barr.reverse();
+	s="";
+	for (i=0;i<num.length;i++){
+		s+=String.fromCharCode(num[i]);
+	}
+
+	return this.NEW_FLOAT + s;
+
 };
 
 BertClass.prototype.encode_object = function (Obj) {
@@ -183,6 +213,9 @@ BertClass.prototype.encode_object = function (Obj) {
 	}
 	if (Obj.type === "Tuple") {
 		return this.encode_tuple(Obj);
+	}
+	if (Obj.type === "Nil") {
+		return this.encode_empty_object();
 	}
 
 	// Check if it's an array...
@@ -200,6 +233,10 @@ BertClass.prototype.encode_atom = function (Obj) {
 
 BertClass.prototype.encode_binary = function (Obj) {
 	return this.BINARY + this.int_to_bytes(Obj.value.length, 4) + Obj.value;
+};
+
+BertClass.prototype.encode_empty_object = function () {
+	return this.EMPTY_OBJECT;
 };
 
 BertClass.prototype.encode_tuple = function (Obj) {
@@ -259,8 +296,10 @@ BertClass.prototype.decode_inner = function (S) {
 		return this.decode_big(S, 1);
 	case this.LARGE_BIG:
 		return this.decode_big(S, 4);
-	case this.FLOAT:
-		return this.decode_float(S);
+	//case this.FLOAT:
+	//	return this.decode_float(S);
+	case this.NEW_FLOAT:
+		return this.decode_new_float(S);
 	case this.STRING:
 		return this.decode_string(S);
 	case this.LIST:
@@ -329,6 +368,22 @@ BertClass.prototype.decode_float = function (S) {
 	var Size = 31;
 	return {
 		value: parseFloat(S.substring(0, Size)),
+		rest: S.substring(Size)
+	};
+};
+
+BertClass.prototype.decode_new_float = function (S) {
+	var Size = 8;
+	// float...
+	var farr = new Float64Array(1);
+	farr[0] = S;
+	var barr = new Int8Array(farr.buffer);   // use the buffer of Float32Array view
+	var num = barr.reverse();
+	
+	console.log("num->",num)
+
+	return {
+		value: num,
 		rest: S.substring(Size)
 	};
 };
